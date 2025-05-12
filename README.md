@@ -38,6 +38,20 @@ Realtime: Server-Sent Events (SSE)
 git clone https://github.com/yourusername/Intrusion-Detection-System-IDS.git
 cd Intrusion-Detection-System-IDS
 
+🖥️ Frontend Setup
+Navigate to frontend directory
+
+    cd Frontend
+
+Install dependencies
+
+     npm install
+     
+Run development server
+
+    npm run dev
+
+
 
 ⚙️ Backend Setup (Python 3.10+)
 
