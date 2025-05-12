@@ -1,0 +1,17 @@
+SQLAlchemy
+
+FastAPI
+
+Pydantic
+
+Scapy
+
+Uvicorn (for running FastAPI)
+
+Psycopg2 (PostgreSQL driver)
+
+Python-Jose (for JWT)
+
+Python-dotenv (for .env file support)
+
+axios
