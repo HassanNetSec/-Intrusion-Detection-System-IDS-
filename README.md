@@ -39,13 +39,17 @@ git clone https://github.com/yourusername/Intrusion-Detection-System-IDS.git
 cd Intrusion-Detection-System-IDS
 
 🖥️ Frontend Setup
-Navigate to frontend directory
 
-    cd Frontend
+The Frontend/ directory only contains the core UI components and pages inside the app/ folder. If you're setting up the frontend from scratch, here’s how to proceed
 
-Install dependencies
+1 Create the Next.js Project
 
-     npm install
+      npx create-next-app@latest frontend    
+2 Move the Uploaded Code into the Correct Folder
+
+•If you've opted to use the src/ directory during setup, place the contents of the uploaded app/ folder into frontend/src/app/.
+
+•If you didn't choose the src/ structure, place the contents directly inside frontend/app/.
      
 Run development server
 
