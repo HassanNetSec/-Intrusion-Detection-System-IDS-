@@ -1,120 +1,174 @@
 'use client'
 import axios from 'axios'
-import React, { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
-const Statistic = () => {
-  const [mockData, setMockData] = useState({});
-
-  // Dummy protocol distribution data
-  const protocolDistribution = [
-    { protocol: 'TCP', count: 4200 },
-    { protocol: 'UDP', count: 1830 },
-    { protocol: 'ICMP', count: 950 },
-    { protocol: 'HTTP', count: 1200 },
-    { protocol: 'HTTPS', count: 980 },
-    { protocol: 'DNS', count: 640 }
-  ];
-
-  // Dummy attack trends data
-  const attackTrends = [
-    { time: '00:00', synScans: 10, ddos: 2 },
-    { time: '03:00', synScans: 15, ddos: 3 },
-    { time: '06:00', synScans: 30, ddos: 6 },
-    { time: '09:00', synScans: 45, ddos: 10 },
-    { time: '12:00', synScans: 60, ddos: 20 },
-    { time: '15:00', synScans: 55, ddos: 18 },
-    { time: '18:00', synScans: 35, ddos: 7 },
-    { time: '21:00', synScans: 25, ddos: 4 },
-  ];
+const Alert = () => {
+  const [alertType, setAlertType] = useState('all')
+  const [alerts, setAlerts] = useState([])
+  const [filteredAlerts, setFilteredAlerts] = useState([])
+  const [eventSource, setEventSource] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const fetch_data_statistic = async () => {
+    const fetchInitialAlerts = async () => {
       try {
-        const token = localStorage.getItem("token")
-        const req = await axios.post("http://localhost:8000/statistic",{
-          token_id : token
-        });
-        setMockData({
-          suspicious_ips: req?.data?.suspicious_ips || [],
-          ddos_attempts_last_24h: req?.data?.ddos_attempts_last_24h || 0,
-          syn_scans_last_24h: req?.data?.syn_scans_last_24h || 0,
-          total_packets: req?.data?.total_packets || 0
-        });
-        console.log("ip: ",req?.data?.suspicious_ips);
+        const token = localStorage.getItem('token')
+        // Initialize alerts
+        await axios.post("http://localhost:8000/capture_packet", {
+          token_id: token,
+        })
         
+        // Get existing alerts from database
+        const response = await axios.post("http://localhost:8000/alert_database")
+        console.log("Database response:", response.data)
+        setAlerts(response.data || [])
       } catch (error) {
-        console.error("Error fetching statistics:", error);
+        console.error("Error fetching alerts:", error)
+      } finally {
+        setIsLoading(false)
       }
-    };
-    
-    fetch_data_statistic();
-  }, []);
+    }
 
-  if (!mockData.suspicious_ips) return <div className="text-gray-800 p-4">Loading stats...</div>;
+    fetchInitialAlerts()
+
+    // Initialize EventSource for real-time updates
+    const newEventSource = new EventSource("http://localhost:8000/stream_alert")
+    
+    newEventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      setAlerts(prev => {
+        // Prevent duplicates by checking if alert already exists
+        const exists = prev.some(alert => 
+          alert.created_at === data.created_at && 
+          alert.description === data.description
+        )
+        return exists ? prev : [...prev, data]
+      })
+    }
+
+    newEventSource.onerror = (error) => {
+      console.error("EventSource error:", error)
+      newEventSource.close()
+    }
+
+    setEventSource(newEventSource)
+
+    return () => {
+      newEventSource.close()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (alertType === 'all') {
+      setFilteredAlerts(alerts)
+    } else {
+      setFilteredAlerts(alerts.filter(alert => alert.alert_type === alertType))
+    }
+  }, [alertType, alerts])
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "Just now"
+    
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now - date) / 1000)
+    
+    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
+    return `${Math.floor(diffInSeconds / 86400)} days ago`
+  }
+
+  const getSeverityColor = (severity) => {
+    if (!severity) return 'bg-gray-100 border-gray-400 text-gray-800'
+    switch (severity.toLowerCase()) {
+      case 'high': return 'bg-red-100 border-red-500 text-red-800'
+      case 'medium': return 'bg-yellow-100 border-yellow-500 text-yellow-800'
+      case 'low': return 'bg-blue-100 border-blue-500 text-blue-800'
+      default: return 'bg-gray-100 border-gray-400 text-gray-800'
+    }
+  }
+
+  const getSeverityBadgeStyle = (severity) => {
+    if (!severity) return 'bg-gray-600 text-white'
+    switch (severity.toLowerCase()) {
+      case 'high': return 'bg-red-600 text-white'
+      case 'medium': return 'bg-yellow-600 text-white'
+      case 'low': return 'bg-blue-600 text-white'
+      default: return 'bg-gray-600 text-white'
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 sm:p-8 max-w-6xl mx-auto">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-6 min-h-screen bg-white text-gray-800 space-y-10">
-      <h1 className="text-3xl font-bold text-blue-700 mb-6">📊 Network Statistics</h1>
-
-      {/* Top Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="Total Packets" value={mockData.total_packets} color="text-blue-600" />
-        <StatCard title="SYN Scans" value={mockData.syn_scans_last_24h} color="text-yellow-600" />
-        <StatCard title="DDoS Attempts" value={mockData.ddos_attempts_last_24h} color="text-red-600" />
-      </div>
-
-      {/* Suspicious IPs */}
-      <div className="bg-gray-100 p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold mb-4">🔍 Suspicious IPs</h2>
-        <ul className="divide-y divide-gray-300">
-          {mockData.suspicious_ips.map((ip, index) => (
-            <li key={index} className="flex justify-between py-2 text-sm">
-              <span className="font-mono">{ip}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Attack Trends (dummy data) */}
-      <div className="bg-gray-100 p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold mb-4">📈 Attack Trends</h2>
-        <div className="grid grid-cols-3 font-semibold text-gray-500 border-b border-gray-300 pb-2 mb-2 text-sm">
-          <span>Time</span><span>SYN Scans</span><span>DDoS</span>
+    <div className="p-6 sm:p-8 max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-4xl font-bold text-gray-800">Security Alerts</h1>
+          <p className="text-sm text-gray-500 mt-1">Live monitoring of potential network threats</p>
         </div>
-        {attackTrends.map((item, idx) => (
-          <div key={idx} className="grid grid-cols-3 text-sm py-2 border-b border-gray-200">
-            <span>{item.time}</span>
-            <span>{item.synScans}</span>
-            <span>{item.ddos}</span>
-          </div>
-        ))}
+        <select
+          onChange={(e) => setAlertType(e.target.value)}
+          className="bg-white text-gray-800 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+          defaultValue="all"
+        >
+          <option value="all">All Alerts</option>
+          <option value="SYN Flood">SYN Flood</option>
+          <option value="ARP Spoofing">ARP Spoofing</option>
+          <option value="Port Scan">Port Scan</option>
+          <option value="DDoS Attempt">DDoS Attempt</option>
+        </select>
       </div>
 
-      {/* Protocol Distribution (dummy data) */}
-      <div className="bg-gray-100 p-6 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold mb-4">🌐 Protocol Distribution</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {protocolDistribution.map((item, idx) => (
+      <div className="space-y-6">
+        {filteredAlerts.length > 0 ? (
+          filteredAlerts.map((alert, index) => (
             <div
-              key={idx}
-              className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col items-center justify-center text-center"
+              key={`${alert.created_at}-${index}`}
+              className={`p-6 border-l-4 rounded-2xl shadow-md hover:shadow-xl transition duration-200 ${getSeverityColor(alert.severity)}`}
             >
-              <span className="text-lg font-semibold">{item.protocol}</span>
-              <span className="text-2xl font-bold text-blue-600">{item.count}</span>
+              <div className="flex justify-between flex-col sm:flex-row sm:items-start gap-4">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-lg sm:text-xl font-semibold">{alert.alert_type}</h2>
+                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${getSeverityBadgeStyle(alert.severity)}`}>
+                      {alert.severity?.toUpperCase() || 'UNKNOWN'}
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+                    {alert.description}
+                  </p>
+                  <div className="mt-2 text-xs text-gray-500">
+                    {alert.packet_id && `Packet ID: ${alert.packet_id}`}
+                    {alert.user_email && ` • Reported by: ${alert.user_email}`}
+                  </div>
+                </div>
+
+                <span className="text-sm text-gray-500 whitespace-nowrap self-start sm:self-center">
+                  {formatTimestamp(alert.created_at)}
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
+          ))
+        ) : (
+          <div className="text-center py-10 text-gray-400 text-sm">
+            {alerts.length === 0 
+              ? "No alerts found in the system." 
+              : "No alerts found for the selected type."}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// Reusable stat card
-const StatCard = ({ title, value, color }) => (
-  <div className="bg-gray-100 p-6 rounded-2xl shadow text-center">
-    <h2 className="text-lg font-medium text-gray-600 mb-2">{title}</h2>
-    <p className={`text-4xl font-bold ${color}`}>{value}</p>
-  </div>
-)
-
-export default Statistic
+export default Alert
