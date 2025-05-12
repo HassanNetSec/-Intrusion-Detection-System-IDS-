@@ -1,174 +1,137 @@
-'use client'
-import axios from 'axios'
-import React, { useState, useEffect } from 'react'
+"use client";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useRouter } from "next/navigation";
 
-const Alert = () => {
-  const [alertType, setAlertType] = useState('all')
-  const [alerts, setAlerts] = useState([])
-  const [filteredAlerts, setFilteredAlerts] = useState([])
-  const [eventSource, setEventSource] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+const Dashboard = () => {
+  const [userEmail, setUserEmail] = useState(null); // Store email instead of token
+  const [dashboardData, setDashboardData] = useState(null); // Store dashboard data
+  const [loading, setLoading] = useState(true); // Loading state for data fetch
+  const router = useRouter();
 
+  // Fake data for the Dashboard stats (replace with real API calls later)
+  const fakeDashboardData = {
+    totalAlerts: 238, 
+    scannedPorts: 159, 
+    ddosAttempts: 72,
+    activeSessions: 14,
+    blockedAttacks: 38,
+    systemUptime: "72 hours",
+    recentAttacks: [
+      { id: 1, ip: "192.168.1.100", type: "SYN Scan", time: "5 mins ago" },
+      { id: 2, ip: "192.168.1.102", type: "Xmas Scan", time: "30 mins ago" },
+      { id: 3, ip: "192.168.1.110", type: "DDoS Attempt", time: "1 hour ago" },
+    ],
+  };
+
+  // Fetch token from localStorage and validate it
+  const token_get_from_localStorage = async () => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) {
+      alert("You need to log in first!");
+      router.push("/login");
+      return;
+    }
+
+    try {
+      // Send the token to the backend
+      const response = await axios.post("http://localhost:8000/protected", {
+        token_id: storedToken, // Sending token to the backend
+      });
+
+      setUserEmail(response.data); // Set the user email after successful validation
+      fetchDashboardData(); // Fetch dashboard data after successful validation
+    } catch (error) {
+      alert("Unauthorized! Please log in again.");
+      localStorage.removeItem("token"); // Clear invalid token
+      router.push("/login");
+    }
+  };
+
+  // Simulate fetching data and setting fake data
+  const fetchDashboardData = async () => {
+    setLoading(true); // Set loading state before fetching data
+    setTimeout(() => {
+      setDashboardData(fakeDashboardData); // Setting fake data
+      setLoading(false); // Set loading state to false after data fetch
+    }, 2000); // Simulating an API call delay
+  };
+
+  // Component did mount equivalent
   useEffect(() => {
-    const fetchInitialAlerts = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        // Initialize alerts
-        await axios.post("http://localhost:8000/capture_packet", {
-          token_id: token,
-        })
-        
-        // Get existing alerts from database
-        const response = await axios.post("http://localhost:8000/alert_database")
-        console.log("Database response:", response.data)
-        setAlerts(response.data || [])
-      } catch (error) {
-        console.error("Error fetching alerts:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchInitialAlerts()
-
-    // Initialize EventSource for real-time updates
-    const newEventSource = new EventSource("http://localhost:8000/stream_alert")
-    
-    newEventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      setAlerts(prev => {
-        // Prevent duplicates by checking if alert already exists
-        const exists = prev.some(alert => 
-          alert.created_at === data.created_at && 
-          alert.description === data.description
-        )
-        return exists ? prev : [...prev, data]
-      })
-    }
-
-    newEventSource.onerror = (error) => {
-      console.error("EventSource error:", error)
-      newEventSource.close()
-    }
-
-    setEventSource(newEventSource)
-
-    return () => {
-      newEventSource.close()
-    }
-  }, [])
-
-  useEffect(() => {
-    if (alertType === 'all') {
-      setFilteredAlerts(alerts)
-    } else {
-      setFilteredAlerts(alerts.filter(alert => alert.alert_type === alertType))
-    }
-  }, [alertType, alerts])
-
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return "Just now"
-    
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInSeconds = Math.floor((now - date) / 1000)
-    
-    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`
-    return `${Math.floor(diffInSeconds / 86400)} days ago`
-  }
-
-  const getSeverityColor = (severity) => {
-    if (!severity) return 'bg-gray-100 border-gray-400 text-gray-800'
-    switch (severity.toLowerCase()) {
-      case 'high': return 'bg-red-100 border-red-500 text-red-800'
-      case 'medium': return 'bg-yellow-100 border-yellow-500 text-yellow-800'
-      case 'low': return 'bg-blue-100 border-blue-500 text-blue-800'
-      default: return 'bg-gray-100 border-gray-400 text-gray-800'
-    }
-  }
-
-  const getSeverityBadgeStyle = (severity) => {
-    if (!severity) return 'bg-gray-600 text-white'
-    switch (severity.toLowerCase()) {
-      case 'high': return 'bg-red-600 text-white'
-      case 'medium': return 'bg-yellow-600 text-white'
-      case 'low': return 'bg-blue-600 text-white'
-      default: return 'bg-gray-600 text-white'
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="p-6 sm:p-8 max-w-6xl mx-auto">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </div>
-    )
-  }
+    token_get_from_localStorage();
+  }, []); // Runs once on component mount
 
   return (
-    <div className="p-6 sm:p-8 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-gray-800">Security Alerts</h1>
-          <p className="text-sm text-gray-500 mt-1">Live monitoring of potential network threats</p>
-        </div>
-        <select
-          onChange={(e) => setAlertType(e.target.value)}
-          className="bg-white text-gray-800 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
-          defaultValue="all"
-        >
-          <option value="all">All Alerts</option>
-          <option value="SYN Flood">SYN Flood</option>
-          <option value="ARP Spoofing">ARP Spoofing</option>
-          <option value="Port Scan">Port Scan</option>
-          <option value="DDoS Attempt">DDoS Attempt</option>
-        </select>
-      </div>
-
-      <div className="space-y-6">
-        {filteredAlerts.length > 0 ? (
-          filteredAlerts.map((alert, index) => (
-            <div
-              key={`${alert.created_at}-${index}`}
-              className={`p-6 border-l-4 rounded-2xl shadow-md hover:shadow-xl transition duration-200 ${getSeverityColor(alert.severity)}`}
-            >
-              <div className="flex justify-between flex-col sm:flex-row sm:items-start gap-4">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-lg sm:text-xl font-semibold">{alert.alert_type}</h2>
-                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${getSeverityBadgeStyle(alert.severity)}`}>
-                      {alert.severity?.toUpperCase() || 'UNKNOWN'}
-                    </span>
-                  </div>
-                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
-                    {alert.description}
-                  </p>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {alert.packet_id && `Packet ID: ${alert.packet_id}`}
-                    {alert.user_email && ` • Reported by: ${alert.user_email}`}
-                  </div>
-                </div>
-
-                <span className="text-sm text-gray-500 whitespace-nowrap self-start sm:self-center">
-                  {formatTimestamp(alert.created_at)}
-                </span>
-              </div>
-            </div>
-          ))
+    <div className="flex flex-grow p-8 bg-gray-50">
+    {/* Main Content */}
+    <div className="flex-1 p-8 bg-white">
+      <h1 className="text-4xl font-semibold text-gray-800 mb-8">Dashboard</h1>
+  
+      {/* User Info */}
+      <div className="p-6 bg-gray-100 border-l-4 border-blue-500 mb-8">
+        {userEmail ? (
+          <p className="text-xl text-gray-700">Logged in as: <strong>{userEmail}</strong></p>
         ) : (
-          <div className="text-center py-10 text-gray-400 text-sm">
-            {alerts.length === 0 
-              ? "No alerts found in the system." 
-              : "No alerts found for the selected type."}
-          </div>
+          <p className="text-xl text-gray-500">No user email found</p>
         )}
       </div>
+  
+      {/* Dashboard Stats */}
+      {loading ? (
+        <div className="text-center text-xl text-gray-500">Loading dashboard data...</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+          {/* Total Alerts */}
+          <div className="bg-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Total Alerts</h3>
+            <p className="text-5xl font-bold text-gray-700">{dashboardData?.totalAlerts}</p>
+          </div>
+  
+          {/* Total Scanned Ports */}
+          <div className="bg-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Total Scanned Ports</h3>
+            <p className="text-5xl font-bold text-gray-700">{dashboardData?.scannedPorts}</p>
+          </div>
+  
+          {/* Total DDoS Attempts */}
+          <div className="bg-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-gray-800 mb-2">Total DDoS Attempts</h3>
+            <p className="text-5xl font-bold text-gray-700">{dashboardData?.ddosAttempts}</p>
+          </div>
+        </div>
+      )}
+  
+      {/* Recent Attacks */}
+      <div className="bg-white p-8 mb-8">
+        <h3 className="text-2xl font-semibold text-gray-800 mb-4">Recent Attacks</h3>
+        <div className="space-y-6">
+          {dashboardData?.recentAttacks && dashboardData.recentAttacks.length > 0 ? (
+            dashboardData.recentAttacks.map((attack) => (
+              <div key={attack.id} className="p-6 bg-gray-50 flex justify-between items-center">
+                <div>
+                  <p className="text-xl font-semibold text-gray-800">{attack.type}</p>
+                  <p className="text-sm text-gray-600">IP: {attack.ip}</p>
+                </div>
+                <p className="text-sm text-gray-500">{attack.time}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500">No recent attacks.</p>
+          )}
+        </div>
+      </div>
+  
+      {/* System Uptime */}
+      <div className="bg-white p-8">
+        <h3 className="text-2xl font-semibold text-gray-800 mb-2">System Uptime</h3>
+        <p className="text-5xl font-bold text-gray-700">{dashboardData?.systemUptime}</p>
+      </div>
     </div>
-  )
-}
+  </div>
+  
+  
+  );
+};
 
-export default Alert
+export default Dashboard;
